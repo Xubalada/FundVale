@@ -1,0 +1,11 @@
+document.querySelector(".newGrid").shadowRoot.querySelectorAll(".right")[0].querySelector(".link__pos").attributes["name"].value
+
+
+
+document.querySelector(".newGrid").shadowRoot.querySelectorAll(".grid-pane-slider")[2].querySelectorAll(".column")[0].querySelectorAll(".link__underline")[0].attributes["name"].value
+
+
+
+/Apps/CFundamentals?view=IncomeStatement&app=true&s=PETR4.SA&st=RIC
+
+
