@@ -62,7 +62,7 @@ class Validator:
                         'border': 1,
                         'align': 'center',
                         'valign': 'vcenter',
-                        'bg_color': '#90ee90'})
+                        'bg_color': '#8b387b'})
                         rows_format_1 = workbook.add_format({'bg_color': '#EEEEEE'})
                         rows_format_2 = workbook.add_format({'bg_color': '#DDDDDD'})
                         rows_format_3 = workbook.add_format({'bg_color': '#CCCCCC'})
@@ -71,6 +71,7 @@ class Validator:
                         #code
                         worksheet.set_row(row, cell_format=title_format)
                         worksheet.write(row,0,title)
+                        worksheet.write(row,8,'*')
                         row +=1
                         print(f'Group: {title}')
                         print('')
@@ -135,14 +136,13 @@ class Validator:
     def get_query_list(bgquery,cd_cvm, quarter_date_fim_exec, eikon_value, tables_name, has_dt_ini_exerc,DEBUG):
             bgquery=bgquery
             results_total = list()
-            result_exact = bgquery.bg_query(
-                cd_cvm=cd_cvm,
-                vl_conta = eikon_value,
-                tables_name=tables_name,
-                dt_fim_exerc=quarter_date_fim_exec,
-                with_like=False,
-                has_dt_ini_exerc=has_dt_ini_exerc
+            queue = list()
+            result_exact = threading.Thread(
+                target=bgquery.bg_query,
+                args=(cd_cvm, eikon_value, tables_name, quarter_date_fim_exec, queue, False, has_dt_ini_exerc)
             )
+            result_exact.daemon = True
+            result_exact.start()
             result_exact_like = []
             result_plus = []
             result_minus = []
@@ -152,40 +152,34 @@ class Validator:
             if eikon_value != 0:
                 exact_like_value, minus_value, plus_value = Validator.get_eikon_values_to_search(eikon_value,DEBUG)
                 if exact_like_value != None:
-                    result_exact_like = bgquery.bg_query(
-                        cd_cvm=cd_cvm,
-                        vl_conta=exact_like_value,
-                        tables_name=tables_name,
-                        dt_fim_exerc=quarter_date_fim_exec,
-                        has_dt_ini_exerc=has_dt_ini_exerc
+                    result_exact_like = threading.Thread(
+                        target=bgquery.bg_query,
+                        args=(cd_cvm, exact_like_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
                     )
-                result_plus = bgquery.bg_query(
-                    cd_cvm=cd_cvm,
-                    vl_conta = plus_value,
-                    tables_name=tables_name,
-                    dt_fim_exerc=quarter_date_fim_exec,
-                    has_dt_ini_exerc=has_dt_ini_exerc
-                )
-                result_minus = bgquery.bg_query(
-                    cd_cvm=cd_cvm,
-                    vl_conta = minus_value,
-                    tables_name=tables_name,
-                    dt_fim_exerc=quarter_date_fim_exec,
-                    has_dt_ini_exerc=has_dt_ini_exerc
-                )
-            for result in result_exact:
-                if result not in results_total:
-                    results_total.append(result)
-            for result in result_exact_like:
-                if result not in results_total:
-                    results_total.append(result)
-            for result in result_minus:
-                if result not in results_total:
-                    results_total.append(result)
-            for result in result_plus:
-                if result not in results_total:
-                    results_total.append(result)
+                    result_exact_like.daemon= True
+                    result_exact_like.start()
 
+                result_plus = threading.Thread(
+                    target=bgquery.bg_query,
+                    args=(cd_cvm, plus_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
+                )
+                result_plus.daemon= True
+                result_plus.start()
+
+                result_minus = threading.Thread(
+                    target=bgquery.bg_query,
+                    args=(cd_cvm, minus_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
+                )
+                result_minus.daemon= True
+                result_minus.start()
+                if exact_like_value != None:
+                    result_exact_like.join()
+                result_plus.join()
+                result_minus.join()
+            result_exact.join()
+            for result in queue:
+                if result not in results_total:
+                    results_total.append(result)
             #print(result_exact, result_minus, result_plus, results_total)
             return results_total
 

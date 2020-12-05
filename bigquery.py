@@ -5,6 +5,7 @@ from pathlib import Path
 path = Path(__file__).resolve()
 sys.path.append(str(path.parents[0]))
 
+import queue
 from google.cloud import bigquery
 from google.oauth2 import service_account
 
@@ -23,9 +24,11 @@ class Bigquery:
         vl_conta,
         tables_name:list,
         dt_fim_exerc:str,
+        queue,
         with_like:bool = True,
-        has_dt_ini_exerc:bool = False
+        has_dt_ini_exerc:bool = False,
     ):
+        queue = queue
         # if DEBUG:
         #     print(vl_conta)
         if has_dt_ini_exerc:
@@ -59,6 +62,8 @@ class Bigquery:
         results = query_job.result() # Wait for the job to complete.
         result_dataframe = results.to_dataframe()
         results_dict = result_dataframe.to_dict(orient='records')
+
+        queue.extend(results_dict)
         return results_dict
 
     def get_cd_cvm(self, symbol:str):
@@ -76,12 +81,15 @@ class Bigquery:
 
 if __name__ == "__main__":
     bgquery = Bigquery()
+    b = []
     a = bgquery.bg_query(
         cd_cvm=9512,
         dt_fim_exerc='2020-09-30',
         vl_conta=0,
-        tables_name='itr_cia_aberta_dre'
+        tables_name='itr_cia_aberta_dre',
+        b=b
     )
+    print(b)
     print(a)
     print(a[0]['DT_FIM_EXERC'])
     # print(bgquery.get_cd_cvm(symbol="PETR4"))
