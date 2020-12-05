@@ -82,7 +82,7 @@ class Validator:
                             if json[quarter][title][section] == '':
                                 row += 1
                                 continue
-                            result_exact, result_minus, result_plus = Validator.get_query_list(
+                            results_total = Validator.get_query_list(
                                 bgquery= bgquery,
                                 cd_cvm=cd_cvm,
                                 quarter_date_fim_exec=quarter,
@@ -91,7 +91,7 @@ class Validator:
                                 has_dt_ini_exerc=has_dt_ini_exerc,
                                 DEBUG=DEBUG
                             )
-                            for result in result_exact:
+                            for result in results_total:
                                 worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
                                 worksheet.write(row,2, result['ORDEM_EXERC'])
                                 worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
@@ -101,27 +101,27 @@ class Validator:
                                 worksheet.write(row,7, result['VL_CONTA'])
                                 worksheet.write(row,8, float(json[quarter][title][section]))
                                 row += 1
-                            for result in result_minus:
-                                worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
-                                worksheet.write(row,2, result['ORDEM_EXERC'])
-                                worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
-                                worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
-                                worksheet.write(row,5, result['CD_CONTA'])
-                                worksheet.write(row,6, result['DS_CONTA'])
-                                worksheet.write(row,7, result['VL_CONTA'])
-                                worksheet.write(row,8, float(json[quarter][title][section]))
-                                row += 1
-                            for result in result_plus:
-                                worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
-                                worksheet.write(row,2, result['ORDEM_EXERC'])
-                                worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
-                                worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
-                                worksheet.write(row,5, result['CD_CONTA'])
-                                worksheet.write(row,6, result['DS_CONTA'])
-                                worksheet.write(row,7, result['VL_CONTA'])
-                                worksheet.write(row,8, float(json[quarter][title][section]))
-                                row += 1
-                            if result_exact == [] and result_minus == [] and result_plus == []:
+                            # for result in result_minus:
+                            #     worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
+                            #     worksheet.write(row,2, result['ORDEM_EXERC'])
+                            #     worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
+                            #     worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
+                            #     worksheet.write(row,5, result['CD_CONTA'])
+                            #     worksheet.write(row,6, result['DS_CONTA'])
+                            #     worksheet.write(row,7, result['VL_CONTA'])
+                            #     worksheet.write(row,8, float(json[quarter][title][section]))
+                            #     row += 1
+                            # for result in result_plus:
+                            #     worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
+                            #     worksheet.write(row,2, result['ORDEM_EXERC'])
+                            #     worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
+                            #     worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
+                            #     worksheet.write(row,5, result['CD_CONTA'])
+                            #     worksheet.write(row,6, result['DS_CONTA'])
+                            #     worksheet.write(row,7, result['VL_CONTA'])
+                            #     worksheet.write(row,8, float(json[quarter][title][section]))
+                            #     row += 1
+                            if results_total == []:
                                 worksheet.write(row,8, float(json[quarter][title][section]))
                                 row += 1
             #                 workbook.close()
@@ -134,6 +134,7 @@ class Validator:
 
     def get_query_list(bgquery,cd_cvm, quarter_date_fim_exec, eikon_value, tables_name, has_dt_ini_exerc,DEBUG):
             bgquery=bgquery
+            results_total = list()
             result_exact = bgquery.bg_query(
                 cd_cvm=cd_cvm,
                 vl_conta = eikon_value,
@@ -172,10 +173,21 @@ class Validator:
                     dt_fim_exerc=quarter_date_fim_exec,
                     has_dt_ini_exerc=has_dt_ini_exerc
                 )
+            for result in result_exact:
+                if result not in results_total:
+                    results_total.append(result)
             for result in result_exact_like:
-                if result not in result_exact:
-                    result_exact.append(result)
-            return result_exact, result_minus, result_plus
+                if result not in results_total:
+                    results_total.append(result)
+            for result in result_minus:
+                if result not in results_total:
+                    results_total.append(result)
+            for result in result_plus:
+                if result not in results_total:
+                    results_total.append(result)
+
+            #print(result_exact, result_minus, result_plus, results_total)
+            return results_total
 
     @staticmethod
     def get_eikon_values_to_search(eikon_value,DEBUG):
@@ -191,7 +203,7 @@ class Validator:
                 print('(-1 < eikon_value < 1:) ',eikon_value, exact_like_value, minus_value, plus_value)
                 print('')
             return exact_like_value, minus_value, plus_value
-        elif 10 > eikon_value >= 1:
+        elif 10 > eikon_value >= 1 or -10 < eikon_value <= -1:
             if '.' in none_zero_decimal:
                 decimal_potence = 10**len(none_zero_decimal.split('.')[1])
                 minus_value = str(((float(none_zero_decimal)*decimal_potence)-1)/decimal_potence)
