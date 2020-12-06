@@ -174,7 +174,7 @@ class DataCrossing:
             try:
                 shutil.move(f'{output_path}{os.sep}{item}',f'{sheet_path}{os.sep}{item}')
             except:
-                if self.symbol not in refreshed_listdir:
+                if symbol not in refreshed_listdir:
                     os.mkdir(symbol_path)
                 if sheet_name not in os.listdir(symbol_path):
                     os.mkdir(sheet_path)
