@@ -23,9 +23,9 @@ class DataCrossing:
         def get_quarter_info(quarter_path,quarter, table_data:dict):
                 workbook = xlrd.open_workbook(f'{quarter_path}{os.sep}{quarter}')
                 sheet = workbook.sheet_by_index(0)
-                rows_number = sheet.nrows
-                actual_title = ''#str(sheet.cell_value(2,0))
-                actual_item = ''#str(sheet.cell_value(3,0))
+                rows_number = sheet.nrows - 1
+                actual_title = str(sheet.cell_value(2,0))
+                actual_section = str(sheet.cell_value(3,0))
                 for row in range(2,rows_number):
                     if sheet.cell_value(row,0) != '':
                         if sheet.cell_value(row,8) == '*':
@@ -33,11 +33,11 @@ class DataCrossing:
                             if actual_title not in table_data:
                                 table_data.update({actual_title: {}})
                             continue
-                        actual_item = str(sheet.cell_value(row,0))
-                        if actual_item not in table_data[actual_title]:
-                            table_data[actual_title].update({actual_item:[]})
+                        actual_section = str(sheet.cell_value(row,0))
+                        if actual_section not in table_data[actual_title]:
+                            table_data[actual_title].update({actual_section:{'values':[],'Nulls':0}})
                         if sheet.cell_value(row,1) != '':
-                            table_data[actual_title][actual_item].append(
+                            table_data[actual_title][actual_section]['values'].append(
                                 [
                                 sheet.cell_value(row,2),
                                 sheet.cell_value(row,5),
@@ -45,8 +45,11 @@ class DataCrossing:
                                 sheet.cell_value(row,8)
                                 ]
                             )
+                        else:
+                            if sheet.cell_value(row,8) == '':
+                                table_data[actual_title][actual_section]['Nulls'] += 1
                     if sheet.cell_value(row,1) != '':
-                        table_data[actual_title][actual_item].append([
+                        table_data[actual_title][actual_section]['values'].append([
                             sheet.cell_value(row,2),
                             sheet.cell_value(row,5),
                             sheet.cell_value(row,6),
@@ -54,21 +57,20 @@ class DataCrossing:
                         ])
         @staticmethod
         def filter_data(table_data, title, section):
-            table_data[title][section]
-            for values in table_data[title][section]:
-                if values not in table_data[title][section]:
+            for values in table_data[title][section]['values']:
+                if values not in table_data[title][section]['values']:
                     continue
-                table_data[title][section] = list(filter((values).__ne__, table_data[title][section]))
-                a = values[:3]
-                table_data[title][section].append(a)
-            for values in table_data[title][section]:
-                if values not in table_data[title][section]:
+                table_data[title][section]['values'] = list(filter((values).__ne__, table_data[title][section]['values']))
+                new_values = values[:3]
+                table_data[title][section]['values'].append(new_values)
+            for values in table_data[title][section]['values']:
+                if values not in table_data[title][section]['values']:
                     continue
-                qunatity = table_data[title][section].count(values)
-                table_data[title][section] = list(filter((values).__ne__, table_data[title][section]))
+                qunatity = table_data[title][section]['values'].count(values)
+                table_data[title][section]['values'] = list(filter((values).__ne__, table_data[title][section]['values']))
                 if qunatity == 1:
                     continue
-                table_data[title][section].append([values,qunatity])
+                table_data[title][section]['values'].append([values,qunatity])
 
         output_path = f'{local_path}{os.sep}xlsx_files_output'
         #threads
@@ -78,8 +80,9 @@ class DataCrossing:
                 table_data = dict()
                 quarter_path = f'{tables_path}{os.sep}{table}'
                 get_data_threads = list()
-                print(f' ##################### Crossing Data From: {table} ##################### ')
-                for quarter in os.listdir(quarter_path):
+                print(f'Crossing Data From: {table}')
+                quarters = os.listdir(quarter_path)
+                for quarter in quarters:
                     thread = threading.Thread(target=get_quarter_info.__func__ , args=(quarter_path,quarter,table_data))
                     thread.daemon = True
                     thread.start()
@@ -97,11 +100,12 @@ class DataCrossing:
                         filter_data_threads.append(thread2)
                 for item in filter_data_threads:
                     item.join()
-                self.create_result_file(symbol=folder,table=table,table_data=table_data)
+                number_of_quarters = len(quarters)
+                self.create_result_file(symbol=folder,table=table,table_data=table_data,number_of_quarters=number_of_quarters)
 
 
-    def create_result_file(self,symbol,table,table_data):
-        self.writer_workbook = xlsxwriter.Workbook(f'{local_path}{os.sep}xlsx_files_output{os.sep}{symbol}_{table}_results.xlsx')
+    def create_result_file(self,symbol,table,table_data,number_of_quarters):
+        self.writer_workbook = xlsxwriter.Workbook(f'{local_path}{os.sep}xlsx_files_output{os.sep}{symbol}{os.sep}{symbol}_{table}_results.xlsx')
         self.writer_worksheet = self.writer_workbook.add_worksheet()
         self.write_header(sheet=self.writer_worksheet,workbook=self.writer_workbook, title=f'{symbol} - {table}')
         rows_format_1 =  self.writer_workbook.add_format({'bg_color': '#EEEEEE'})
@@ -122,18 +126,21 @@ class DataCrossing:
             self.writer_worksheet.write(row,5,'*')
             row +=1
             for section in table_data[title]:
-                print(f'Writing:  {section}')
                 rows_format = next(formats)
                 self.writer_worksheet.set_row(row, cell_format=rows_format)
                 self.writer_worksheet.write(row,0,section)
-                if table_data[title][section] == []:
+                non_nulls_quarters_section = number_of_quarters - table_data[title][section]['Nulls']
+                #print(table_data[title][section]['values']['Nulls'])
+                if table_data[title][section]['values'] == []:
                     self.writer_worksheet.write(row,5,'-')
+                    self.writer_worksheet.write(row,6,non_nulls_quarters_section)
                     row +=1
-                for item in table_data[title][section]:
+                for item in table_data[title][section]['values']:
                     self.writer_worksheet.write(row,1, item[0][2])
                     self.writer_worksheet.write(row,2,item[0][0])
                     self.writer_worksheet.write(row,3,item[0][1])
                     self.writer_worksheet.write(row,5,item[1])
+                    self.writer_worksheet.write(row,6,non_nulls_quarters_section)
                     row +=1
         self.writer_workbook.close()
 
@@ -145,12 +152,13 @@ class DataCrossing:
         'align': 'center',
         'valign': 'vcenter',
         'fg_color': '#6e2d5f'})
-        sheet.merge_range(0,1,0,5, title , quarter_header_format)
+        sheet.merge_range(0,1,0,6, title , quarter_header_format)
         sheet.write(1, 1, 'FILE_NAME_ROW_NUMBER')
         sheet.write(1, 2, 'ORDEM_EXERC')
         sheet.write(1, 3, 'CD_CONTA')
         sheet.write(1, 4, 'DS_CONTA')
         sheet.write(1, 5, 'OCURRENCIES')
+        sheet.write(1, 6, 'NON-NULLS QUARTER')
 
     def organize(self):
         output_path = f'{local_path}{os.sep}xlsx_files_output'
