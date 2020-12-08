@@ -26,8 +26,12 @@ class DataCrossing:
                 rows_number = sheet.nrows - 1
                 actual_title = str(sheet.cell_value(2,0))
                 actual_section = str(sheet.cell_value(3,0))
+                section_temp = []
                 for row in range(2,rows_number):
                     if sheet.cell_value(row,0) != '':
+                        if section_temp != []:
+                             table_data[actual_title][actual_section]['values'].extend(section_temp)
+                             section_temp = []
                         if sheet.cell_value(row,8) == '*':
                             actual_title =  str(sheet.cell_value(row,0))
                             if actual_title not in table_data:
@@ -37,40 +41,43 @@ class DataCrossing:
                         if actual_section not in table_data[actual_title]:
                             table_data[actual_title].update({actual_section:{'values':[],'Nulls':0}})
                         if sheet.cell_value(row,1) != '':
-                            table_data[actual_title][actual_section]['values'].append(
-                                [
-                                sheet.cell_value(row,2),
-                                sheet.cell_value(row,5),
-                                sheet.cell_value(row,6),
-                                sheet.cell_value(row,8)
-                                ]
-                            )
+                            values = [sheet.cell_value(row,2),sheet.cell_value(row,5),sheet.cell_value(row,6),sheet.cell_value(row,8)]
+                            if values not in section_temp:
+                                section_temp.append(values)
                         else:
                             if sheet.cell_value(row,8) == '':
                                 table_data[actual_title][actual_section]['Nulls'] += 1
                     if sheet.cell_value(row,1) != '':
-                        table_data[actual_title][actual_section]['values'].append([
-                            sheet.cell_value(row,2),
-                            sheet.cell_value(row,5),
-                            sheet.cell_value(row,6),
-                            sheet.cell_value(row,8)
-                        ])
+                        values = [sheet.cell_value(row,2),sheet.cell_value(row,5),sheet.cell_value(row,6),sheet.cell_value(row,8)]
+                        if values not in section_temp:
+                            section_temp.append(values)
         @staticmethod
         def filter_data(table_data, title, section):
+            repeated_values = dict()
             for values in table_data[title][section]['values']:
-                if values not in table_data[title][section]['values']:
+                if values not in table_data[title][section]['values'] or len(values)<4:
                     continue
+                value_eikon_repetitions = table_data[title][section]['values'].count(values)
                 table_data[title][section]['values'] = list(filter((values).__ne__, table_data[title][section]['values']))
                 new_values = values[:3]
-                table_data[title][section]['values'].append(new_values)
+                #adiciona novamente em igual quantidade os values sem o eikon_value [orde_exec,cd_conta,ds_conta]
+                for repetition in range(0,value_eikon_repetitions):
+                    table_data[title][section]['values'].append(new_values)
+                repeated_values.update({str(values): value_eikon_repetitions})
+                #print(str(values))
             for values in table_data[title][section]['values']:
                 if values not in table_data[title][section]['values']:
                     continue
-                qunatity = table_data[title][section]['values'].count(values)
+                quantiy = table_data[title][section]['values'].count(values)
                 table_data[title][section]['values'] = list(filter((values).__ne__, table_data[title][section]['values']))
-                if qunatity == 1:
+                if quantiy == 1:
                     continue
-                table_data[title][section]['values'].append([values,qunatity])
+                repeated_values_str = ''
+                for item in repeated_values:
+                    new_values_string = str(values).replace(']','')
+                    if new_values_string in item:
+                        repeated_values_str = repeated_values_str + f"{item.replace(new_values_string,'').replace(']','').replace(',','')}: {repeated_values[item]}, "
+                table_data[title][section]['values'].append([values,quantiy,repeated_values_str])
 
         output_path = f'{local_path}{os.sep}xlsx_files_output'
         #threads
@@ -87,7 +94,6 @@ class DataCrossing:
                     thread.daemon = True
                     thread.start()
                     get_data_threads.append(thread)
-
                 for item in get_data_threads:
                     item.join()
                 filter_data_threads = list()
@@ -132,15 +138,16 @@ class DataCrossing:
                 non_nulls_quarters_section = number_of_quarters - table_data[title][section]['Nulls']
                 #print(table_data[title][section]['values']['Nulls'])
                 if table_data[title][section]['values'] == []:
-                    self.writer_worksheet.write(row,5,'-')
-                    self.writer_worksheet.write(row,6,non_nulls_quarters_section)
+                    self.writer_worksheet.write(row,4,'-')
+                    self.writer_worksheet.write(row,5,non_nulls_quarters_section)
                     row +=1
                 for item in table_data[title][section]['values']:
                     self.writer_worksheet.write(row,1, item[0][2])
                     self.writer_worksheet.write(row,2,item[0][0])
                     self.writer_worksheet.write(row,3,item[0][1])
-                    self.writer_worksheet.write(row,5,item[1])
-                    self.writer_worksheet.write(row,6,non_nulls_quarters_section)
+                    self.writer_worksheet.write(row,4,item[1])
+                    self.writer_worksheet.write(row,5,non_nulls_quarters_section)
+                    self.writer_worksheet.write(row,6,item[2])
                     row +=1
         self.writer_workbook.close()
 
@@ -153,12 +160,12 @@ class DataCrossing:
         'valign': 'vcenter',
         'fg_color': '#6e2d5f'})
         sheet.merge_range(0,1,0,6, title , quarter_header_format)
-        sheet.write(1, 1, 'FILE_NAME_ROW_NUMBER')
+        sheet.write(1, 1, 'DS_CONTA')
         sheet.write(1, 2, 'ORDEM_EXERC')
         sheet.write(1, 3, 'CD_CONTA')
-        sheet.write(1, 4, 'DS_CONTA')
-        sheet.write(1, 5, 'OCURRENCIES')
-        sheet.write(1, 6, 'NON-NULLS QUARTER')
+        sheet.write(1, 4, 'OCURRENCIES')
+        sheet.write(1, 5, 'NON-NULLS QUARTER')
+        sheet.write(1, 6, 'VALUES')
 
     def organize(self):
         output_path = f'{local_path}{os.sep}xlsx_files_output'
