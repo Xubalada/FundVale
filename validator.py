@@ -7,7 +7,7 @@ local_path = os.path.dirname(os.path.realpath(__file__))
 from itertools import cycle
 import xlsxwriter
 from excell_to_json import DataExtrator
-from bigquery import Bigquery
+from dbquery import DBquery
 import threading
 import re
 
@@ -22,11 +22,11 @@ class Validator:
     @staticmethod
     def run(DEBUG:bool=False):
         DEBUG = DEBUG
-        bgquery = Bigquery()
+        dbquery = DBquery()
         files_to_validate = os.listdir(f"{local_path}{os.sep}xls_files_input")
         for item in files_to_validate:
             symbol = os.path.splitext(item)[0]
-            cd_cvm = bgquery.get_cd_cvm(symbol=symbol)
+            cd_cvm = dbquery.get_cd_cvm(symbol=symbol)
             for sheet_number in range(0,3):
                 json = Validator.get_json_file(file_name=item,sheet_number=sheet_number)
                 for quarter in json:
@@ -84,7 +84,7 @@ class Validator:
                                 row += 1
                                 continue
                             results_total = Validator.get_query_list(
-                                bgquery= bgquery,
+                                dbquery= dbquery,
                                 cd_cvm=cd_cvm,
                                 quarter_date_fim_exec=quarter,
                                 eikon_value= float(json[quarter][title][section]),
@@ -92,53 +92,29 @@ class Validator:
                                 has_dt_ini_exerc=has_dt_ini_exerc,
                                 DEBUG=DEBUG
                             )
+                            print(results_total)
                             for result in results_total:
-                                worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
-                                worksheet.write(row,2, result['ORDEM_EXERC'])
-                                worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
-                                worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
-                                worksheet.write(row,5, result['CD_CONTA'])
-                                worksheet.write(row,6, result['DS_CONTA'])
-                                worksheet.write(row,7, result['VL_CONTA'])
+                                worksheet.write(row,1, result['ref'])
+                                worksheet.write(row,2, result['ordem_exerc'])
+                                worksheet.write(row,3, result['dt_ini_exerc'], date_format)
+                                worksheet.write(row,4, result['dt_fim_exerc'], date_format)
+                                worksheet.write(row,5, result['cd_conta'])
+                                worksheet.write(row,6, result['ds_conta'])
+                                worksheet.write(row,7, result['vl_conta'])
                                 worksheet.write(row,8, float(json[quarter][title][section]))
                                 row += 1
-                            # for result in result_minus:
-                            #     worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
-                            #     worksheet.write(row,2, result['ORDEM_EXERC'])
-                            #     worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
-                            #     worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
-                            #     worksheet.write(row,5, result['CD_CONTA'])
-                            #     worksheet.write(row,6, result['DS_CONTA'])
-                            #     worksheet.write(row,7, result['VL_CONTA'])
-                            #     worksheet.write(row,8, float(json[quarter][title][section]))
-                            #     row += 1
-                            # for result in result_plus:
-                            #     worksheet.write(row,1, result['FILE_NAME_ROW_NUMBER'])
-                            #     worksheet.write(row,2, result['ORDEM_EXERC'])
-                            #     worksheet.write(row,3, result['DT_INI_EXERC'], date_format)
-                            #     worksheet.write(row,4, result['DT_FIM_EXERC'], date_format)
-                            #     worksheet.write(row,5, result['CD_CONTA'])
-                            #     worksheet.write(row,6, result['DS_CONTA'])
-                            #     worksheet.write(row,7, result['VL_CONTA'])
-                            #     worksheet.write(row,8, float(json[quarter][title][section]))
-                            #     row += 1
                             if results_total == []:
                                 worksheet.write(row,8, float(json[quarter][title][section]))
                                 row += 1
-            #                 workbook.close()
-            #                 break
-            #             break
-            #         break
-            #     break
-            # break
+
                     workbook.close()
 
-    def get_query_list(bgquery,cd_cvm, quarter_date_fim_exec, eikon_value, tables_name, has_dt_ini_exerc,DEBUG):
-            bgquery=bgquery
+    def get_query_list(dbquery,cd_cvm, quarter_date_fim_exec, eikon_value, tables_name, has_dt_ini_exerc,DEBUG):
+            dbquery=dbquery
             results_total = list()
             queue = list()
             result_exact = threading.Thread(
-                target=bgquery.bg_query,
+                target=dbquery.postgres_query,
                 args=(cd_cvm, eikon_value, tables_name, quarter_date_fim_exec, queue, False, has_dt_ini_exerc)
             )
             result_exact.daemon = True
@@ -153,21 +129,21 @@ class Validator:
                 exact_like_value, minus_value, plus_value = Validator.get_eikon_values_to_search(eikon_value,DEBUG)
                 if exact_like_value != None:
                     result_exact_like = threading.Thread(
-                        target=bgquery.bg_query,
+                        target=dbquery.postgres_query,
                         args=(cd_cvm, exact_like_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
                     )
                     result_exact_like.daemon= True
                     result_exact_like.start()
 
                 result_plus = threading.Thread(
-                    target=bgquery.bg_query,
+                    target=dbquery.postgres_query,
                     args=(cd_cvm, plus_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
                 )
                 result_plus.daemon= True
                 result_plus.start()
 
                 result_minus = threading.Thread(
-                    target=bgquery.bg_query,
+                    target=dbquery.postgres_query,
                     args=(cd_cvm, minus_value, tables_name, quarter_date_fim_exec, queue, True, has_dt_ini_exerc)
                 )
                 result_minus.daemon= True
@@ -250,7 +226,7 @@ class Validator:
         'valign': 'vcenter',
         'fg_color': 'green'})
         worksheet.merge_range(0,quarter_column,0,quarter_column + 7, quarter_name , quarter_header_format)
-        worksheet.write(1, quarter_column, 'FILE_NAME_ROW_NUMBER')
+        worksheet.write(1, quarter_column, 'ref')
         worksheet.write(1, quarter_column + 1, 'ORDEM_EXERC')
         worksheet.write(1, quarter_column + 2, 'DT_INI_EXERC')
         worksheet.write(1, quarter_column + 3, 'DT_FIM_EXERC')
